@@ -41,7 +41,7 @@ def _analyze_review(content, bedrock_chat):
         </review>
 
         <instructions>
-        - review categories should be grouped by app version code, using <version='xyz'> </version> tag
+        - review categories should be grouped by app version code and code reviewer language, using <version='xyz' lang='abc'> </version> tag
         - Identify and category negative reviews in the <category></category> tags, you can make categories on your own
         - Describe the issue in the <description></description> tag, explain why the player is dissatisfied
         - Your output must be a fully formatted xml file that intelligently contains the <version>, <issue>, <category>, <count> tags and no other tags.
@@ -49,7 +49,7 @@ def _analyze_review(content, bedrock_chat):
         </instructions>
 
         \n\nAssistant:
-        <version='version_a'>
+        <version='version_a' lang='abc'>
         <issue>
         <category> issue x category</category>
         <count> how many reviews are in x category</count>
@@ -61,7 +61,7 @@ def _analyze_review(content, bedrock_chat):
         <description>why player is dissatisfied for this issue category</description>
         </issue>
         </version>
-        <version='version_b'>
+        <version='version_b' lang='abc'>
         <issue>
         <category> issue x category</category>
         <count> how many reviews are in x category</count>
@@ -103,7 +103,7 @@ def _merge_review(content, bedrock_chat):
         </instructions>
 
         \n\nAssistant:
-        <version='version_a'>
+        <version='version_a' lang='abc'>
         <issue>
         <category> issue x category</category>
         <count> how many reviews are in x category</count>
@@ -115,7 +115,7 @@ def _merge_review(content, bedrock_chat):
         <description>why player is dissatisfied for this issue category</description>
         </issue>
         </version>
-        <version='version_b'>
+        <version='version_b' lang='abc'>
         <issue>
         <category> issue x category</category>
         <count> how many reviews are in x category</count>
@@ -152,7 +152,7 @@ def _write_analysis(content, bedrock):
 
         <instructions>
         - The analysis must be in markdown format, you can use bold, but you must not use heading.
-        - The analysis must be in simple chinese.
+        - The analysis must be in Simplified Chinese, you must not use Traditional Chinese.
         - The analysis must contain three sections: Summary, Key Issues Analysis and Conclusion.
         - You must calculate the total number of counts by adding up the counts of each issue, and you must include this total number of counts in the Summary, outputting as: "The total number of unsatisfactory feedback from players is xx".
         - For each issue, you must analysis it in bullet format, and you must include what the count of the Issue is, what the percentage of the Issue count is to the total of all Issue counts, outputting as: "Count:xxx, Percentage: yy.yy%".
@@ -174,6 +174,46 @@ def _write_analysis(content, bedrock):
         result_list.append(chunk)
         
     return ''.join(result_list)
+
+def _compare_analysis_result(target_data, baseline_data, target_version_no, lang, bedrock):
+    compare_prompt = PromptTemplate(
+    template="""
+        You are an AI assistant. 
+        You'll be provided with the analysis of a game app review issues of target version in xml format in <target></target> tag,
+        and will be provided with several other version's analysis as baseline in xml format in <baseline></baseline> tag.
+        Your task is to analyze the review issues, compare the target version  review issues with the baseline version's, find out what new problems have arisen in the target version, 
+        find out what problems have become worse in the target version. 
+        You need to follow the instructions in <instructions></instructions> tags.
+        
+        <target> {target_data} </target>
+        <baseline> {baseline_data} </baseline>
+
+        <instructions>
+        - You must output a full analysis report in markdown format in Chinese
+        - You must explain your points in detail and provide data to support them
+        - <baseline></baseline> tag may contain more than one version of the review issue analysis, you must analyze each version of the review issue analysis
+        - The report header must include target_version_number and lang, in the format of: **Comparative Report for Version {target_version_no}, Language Code {lang}**
+        </instructions>
+
+        \n\nAssistant:
+        """,
+        input_variables=["target_data","baseline_data", "target_version_no", "lang"]
+    )
+
+    compare_chain = compare_prompt | bedrock | StrOutputParser()
+    
+    compare_list=[]
+    for chunk in compare_chain.stream({
+            "target_data": target_data,
+            "baseline_data": baseline_data,
+            "target_version_no": target_version_no,
+            "lang": lang
+        }):
+        # print(chunk, end="", flush=True)
+        compare_list.append(chunk)
+
+    return ''.join(compare_list)
+
 
 def _init_data(data):
     st.markdown('''**开始拆分数据...**''')
@@ -198,6 +238,7 @@ def analyze_data(data, bedrock_chat):
         analyze_result[lang]={}
         for version in raw[lang]:
             docs = raw[lang][version]
+            analyze_result[lang][version]={}
             st.caption(f'''开始分析数据集语言{lang}, 版本{version}, 共{len(docs)}批''')
             chunk_result= []
             for i, doc in enumerate(docs, start=1):
@@ -206,15 +247,34 @@ def analyze_data(data, bedrock_chat):
             st.success(f"分析数据集语言{lang}, 版本{version} 完成",icon="✅")
             
             st.caption(f'''开始合并数据集语言{lang}, 版本{version}''')
-            analyze_result[lang][version]=_merge_review(''.join(chunk_result), bedrock_chat)
+            
+            analyze_result[lang][version]["xmldata"]=_merge_review(''.join(chunk_result), bedrock_chat)
             st.success(f"合并数据集语言{lang}, 版本{version} 完成",icon="✅")
             # todo write article
             st.caption(f'''开始翻译并撰写报告：语言{lang}, 版本{version}''')
             
             st.divider()
             # _write_analysis(analyze_result[lang][version], bedrock_chat)
-            analysis_report = _write_analysis(analyze_result[lang][version], bedrock_chat)
+            analyze_result[lang][version]["report"] = _write_analysis(analyze_result[lang][version]["xmldata"], bedrock_chat)
             st.success(f'''完成报告：语言{lang}, 版本{version}''',icon="✅")
-            st.markdown(analysis_report)
+            st.markdown(analyze_result[lang][version]["report"])
             st.divider()
     return analyze_result
+
+def compare_target_data(target_version_no, analyze_result, bedrock_chat):
+    compare_result={}
+    for lang, versions in analyze_result.items():
+        target_data=''
+        baseline_list = []
+        for version, data in versions.items():
+            if version == target_version_no:
+                target_data=data['xmldata']
+            else:
+                baseline_list.append(data['xmldata'])
+        # print(f"{lang}, {version}, baseline_data: {''.join(xmldata_list)}, target_data: {target_data}")
+        st.caption(f'''开始对比：语言{lang}, 版本{version}''')
+        compare_result[lang]= _compare_analysis_result(target_data, ''.join(baseline_list), target_version_no, lang, bedrock_chat)
+        st.success(f'''完成对比：语言{lang}, 版本{version}''',icon="✅")
+        st.markdown(compare_result[lang])
+        
+    return compare_result

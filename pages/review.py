@@ -1,4 +1,4 @@
-import os
+import os 
 from pathlib import Path
 import streamlit as st
 import pandas as pd
@@ -11,6 +11,7 @@ from utils import review_analyzer
 
 if "rawdata" not in st.session_state:
     st.session_state.rawdata = st.empty()
+    st.session_state.target_version=st.empty()
 
 st.header("App Review")
 
@@ -34,15 +35,6 @@ def _show_raw_data_statics(data):
     grouped_review_number_by_version = data.groupby('App Version Code')['Star Rating'].count().reset_index(name='total review')
     st.bar_chart(grouped_review_number_by_version.set_index('App Version Code'))
     
-    # st.divider()
-    # pivot_table = pd.pivot_table(
-    #         data,
-    #         values='Star Rating',
-    #         index='Reviewer Language',
-    #         columns='App Version Code',
-    #         aggfunc='sum'
-    #     )
-    # st.dataframe(pivot_table)
 
 uploaded_file = st.file_uploader("Choose a file")
 if uploaded_file is not None:
@@ -51,7 +43,6 @@ if uploaded_file is not None:
     if st.checkbox('Show raw data'):
         st.write(st.session_state.rawdata)
     
-    # st.session_state.reviewdata = st.session_state.rawdata[st.session_state.rawdata['Review Text'].notnull() & (st.session_state.rawdata['Review Text'] != '')]
     st.session_state.reviewdata = st.session_state.rawdata
     st.session_state.reviewdata['App Version Code']= st.session_state.reviewdata['App Version Code'].astype(str)
     st.session_state.reviewdata['App Version Code'] = st.session_state.reviewdata['App Version Code'].fillna('N/A')
@@ -63,12 +54,20 @@ if uploaded_file is not None:
     st.divider()
     st.info('筛选数据进行分析', icon="ℹ️")
     all_version=st.session_state.reviewdata['App Version Code'].value_counts()
-    target_version = st.multiselect(
+    
+    target_version = st.selectbox(
         '目标版本',
-        all_version.index,
+        all_version.index
+    )
+    st.session_state.target_version=target_version
+    
+    baseline_version = st.multiselect(
+        '基准版本',
+        all_version.index.drop(target_version),
         [])
-    target_version = [str(x) for x in target_version]
-    version_mask=st.session_state.reviewdata['App Version Code'].isin(target_version)
+    baseline_version = [str(x) for x in baseline_version]
+    analyze_version = baseline_version + [str(target_version)]
+    version_mask=st.session_state.reviewdata['App Version Code'].isin(analyze_version)
     
     all_lang=st.session_state.reviewdata['Reviewer Language'].value_counts()
     target_lang = st.multiselect(
@@ -152,13 +151,15 @@ if uploaded_file is not None:
                 bedrock_chat=bedrock_wrapper.init_bedrock_chat(model_id=sonnet_id, region_name=region_name)
 
                 analyze_results = review_analyzer.analyze_data(target_df, bedrock_chat)
-                st.json(analyze_results)
+                compare_results = review_analyzer.compare_target_data(st.session_state.target_version, analyze_results, bedrock_chat)
+                # st.json(analyze_results)
                 
-                # time.sleep(2)
+            # for lang, versions in analyze_results.items():
+            #     for version, data in versions.items():
+            #         st.divider()
+            #         st.write(f"{lang}-{version}")
+            #         data=analyze_results[lang][version]['report']
+            #         st.markdown(data)
                 
-                # st.write("开始分批分析")
-                # time.sleep(1)
-                # st.write("开始撰写评论文章...")
-                # time.sleep(1)
-                # st.write("分析完成")
+
                 
