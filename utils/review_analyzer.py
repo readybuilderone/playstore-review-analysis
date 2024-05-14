@@ -189,8 +189,10 @@ def _compare_analysis_result(target_data, baseline_data, target_version_no, lang
         <baseline> {baseline_data} </baseline>
 
         <instructions>
-        - You must output a full analysis report in markdown format in Chinese
-        - You must explain your points in detail and provide data to support them
+        - You must output a full analysis report in markdown format in Simplified Chinese, you must not use Traditional Chinese.
+        - Your report must be in markdown format, you can use bold, but you must not use heading.
+        - Your report must not include any xml tag.
+        - You must explain your ideas in detail and provide data to support them.
         - <baseline></baseline> tag may contain more than one version of the review issue analysis, you must analyze each version of the review issue analysis
         - The report header must include target_version_number and lang, in the format of: **Comparative Report for Version {target_version_no}, Language Code {lang}**
         </instructions>

@@ -13,7 +13,7 @@ if "rawdata" not in st.session_state:
     st.session_state.rawdata = st.empty()
     st.session_state.target_version=st.empty()
 
-st.header("App Review")
+st.header("Google Play 应用商店评论分析")
 
 def _show_raw_data_statics(data):
     st.divider()
@@ -36,9 +36,14 @@ def _show_raw_data_statics(data):
     st.bar_chart(grouped_review_number_by_version.set_index('App Version Code'))
     
 
-uploaded_file = st.file_uploader("Choose a file")
-if uploaded_file is not None:
-    st.session_state.rawdata = pd.read_csv(uploaded_file, encoding='utf-16')
+uploaded_file_list = st.file_uploader("上传一个或多个文件", accept_multiple_files=True)
+if len(uploaded_file_list)>0:
+    dfs = []
+    for csv_file in uploaded_file_list:
+        df = pd.read_csv(csv_file, encoding='utf-16')
+        dfs.append(df)
+    st.session_state.rawdata = pd.concat(dfs, ignore_index=True)
+    st.session_state.rawdata.drop_duplicates(keep='first', inplace=True)
     st.divider()
     if st.checkbox('Show raw data'):
         st.write(st.session_state.rawdata)
@@ -52,7 +57,10 @@ if uploaded_file is not None:
     _show_raw_data_statics(st.session_state.reviewdata)
     
     st.divider()
-    st.info('筛选数据进行分析', icon="ℹ️")
+    st.info('跨语言数据分析', icon="ℹ️")
+    
+    st.divider()
+    st.info('按语言筛选数据分析', icon="ℹ️")
     all_version=st.session_state.reviewdata['App Version Code'].value_counts()
     
     target_version = st.selectbox(
