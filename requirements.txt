@@ -1,5 +1,7 @@
 boto3
 langchain
+langchain-community
 streamlit
 pandas
 matplotlib
+langchain-community
