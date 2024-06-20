@@ -89,6 +89,50 @@ def _analyze_review_by_lang(content, bedrock_chat):
         
     return ''.join(result_list)
 
+def _analyze_hg_review(content, bedrock_chat):
+    pass
+    analyze_prompt = PromptTemplate(
+        template="""
+        \n\nHuman: 
+
+        You are an AI assistant trained to analyz posts and comments in gaming forums.
+        You're specialized in many languages.
+        You'll be provided with a batch of posts and comments in csv, the format is described in the <format> </format> tag.
+        Your task is to identify the topics that players are interested in from their Posts and Comments in <review> </review> tag, and summarize the players' perspectives on each topics.
+        You need to follow the instructions in <instructions></instructions> tag.
+
+        <format>
+        - Column 1, post_id: the post id.
+        - Column 2, post_content: the content of user's post.
+        - Column 3, comment_id: the comment id.
+        - Column 4, created_at: Date time when the comment is created.
+        - Column 5, comment_content: The content of the comment.
+        </format>
+
+        <review> 
+        {document}
+        </review>
+
+        <instructions>
+        - Your output must be a fully formatted report in markdown format in Simple Chinese.
+        </instructions>
+
+        \n\nAssistant:
+        """,
+        input_variables=["document"]
+    )
+
+    insight_chain = analyze_prompt | bedrock_chat | StrOutputParser()
+    
+    result_list=[]
+    for chunk in insight_chain.stream({
+        "document": {content},
+    }):
+        # print(chunk, end="", flush=True)
+        result_list.append(chunk)
+        
+    return ''.join(result_list)
+
 def _analyze_review(content, bedrock_chat):
     analyze_prompt = PromptTemplate(
         template="""
@@ -416,6 +460,13 @@ def _init_data(data):
         raw[version]= docs
         st.success(f"拆分数据完成: 版本:{version} 共{len(target_data)}条, 分成{len(docs)} 批次处理",icon="✅")
     return raw
+
+# @st.cache_data
+def analyze_hg_data(data, _bedrock_chat):
+    st.markdown('''**开始分析数据...**''')
+    result = _analyze_hg_review(data.to_string(), _bedrock_chat)
+    st.write(result)
+    return result
 
 @st.cache_data
 def analyze_data(data, _bedrock_chat):
