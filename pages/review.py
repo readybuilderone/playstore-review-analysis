@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from utils import bedrock_wrapper
 from utils import review_analyzer
 
+REGION = 'us-east-1'
+
 def _init_session_state():
     if 'rawdata' not in st.session_state:
         st.session_state.rawdata = None
@@ -116,7 +118,7 @@ if len(uploaded_file_list)>0:
     if st.button("点击这个按钮，使用LLM分析评论", type="primary", use_container_width=True):
         with st.status("分析评论...", expanded=True):
             sonnet_id = "anthropic.claude-3-sonnet-20240229-v1:0"
-            region_name='us-west-2'
+            region_name= REGION
             bedrock_chat=bedrock_wrapper.init_bedrock_chat(model_id=sonnet_id, region_name=region_name)
             st.success("初始化 Bedrock",icon="✅")
             
@@ -152,7 +154,7 @@ if len(uploaded_file_list)>0:
         with st.status("分析目标语言评论...", expanded=True):
             st.success("初始化 Bedrock",icon="✅")
             sonnet_id = "anthropic.claude-3-sonnet-20240229-v1:0"
-            region_name='us-west-2'
+            region_name= REGION
             bedrock_chat=bedrock_wrapper.init_bedrock_chat(model_id=sonnet_id, region_name=region_name)
             st.session_state.analyze_result_by_lang = review_analyzer.analyze_data_by_lang(lang_target_df, bedrock_chat)
             st.session_state.compare_result_by_lang = review_analyzer.compare_target_data_by_lang(st.session_state.target_version, st.session_state.analyze_result_by_lang, bedrock_chat)
