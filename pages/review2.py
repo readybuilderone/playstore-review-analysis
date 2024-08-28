@@ -12,10 +12,14 @@ from utils import review_analyzer
 REGION = 'us-east-1'
 
 def _init_session_state():
+    # Store the original data from uploaded CSV files
     if 'rawdata' not in st.session_state:
         st.session_state.rawdata = None
+    # Store the processed full dataset derived from rawdata
     if 'reviewdata' not in st.session_state:
         st.session_state.reviewdata= None
+        
+    # store version compare info
     if 'target_version' not in st.session_state:
         st.session_state.target_version= None
     if 'analyze_result' not in st.session_state:
@@ -27,10 +31,10 @@ def _init_session_state():
     if 'compare_result_by_lang' not in st.session_state:
         st.session_state.compare_result_by_lang={}
 
-def _show_raw_data_statics(data):
-    st.divider()
+def _show_review_data_statics(data):
     st.info(f"数据集信息: {len(data)}行", icon="ℹ️")
-    with st.expander("查看详细"):        
+    
+    with st.expander("查看详细", expanded=True, icon="🔎"):
         st.markdown(f'**数据集共包含语言种类:** {len(data['Reviewer Language'].value_counts())}')
         grouped_review_number_by_language = data.groupby('Reviewer Language')['Star Rating'].count().reset_index(name='total review')
         st.bar_chart(grouped_review_number_by_language.set_index('Reviewer Language'))
@@ -45,7 +49,7 @@ def _show_raw_data_statics(data):
         grouped_review_number_by_version = data.groupby('App Version Code')['Star Rating'].count().reset_index(name='total review')
         st.bar_chart(grouped_review_number_by_version.set_index('App Version Code'))
     
-def _show_data_by_rating(data):
+def _filter_data_by_rating(data):
     st.write(f"评分分布统计:")
     rating_grouped = data.groupby('Star Rating').size().reset_index(name='RatingCount')
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -67,9 +71,11 @@ if len(uploaded_file_list)>0:
     st.session_state.rawdata = pd.concat(dfs, ignore_index=True)
     st.session_state.rawdata.drop_duplicates(keep='first', inplace=True)
     
+    # show raw data if user want to
     st.divider()
     if st.checkbox('Show raw data'):
         st.write(st.session_state.rawdata)
+        
     # init st.session_state.reviewdata
     st.session_state.reviewdata = st.session_state.rawdata
     st.session_state.reviewdata['App Version Code']= st.session_state.reviewdata['App Version Code'].astype(str)
@@ -78,16 +84,17 @@ if len(uploaded_file_list)>0:
     st.session_state.reviewdata['Review Date'] = pd.to_datetime(st.session_state.reviewdata['Review Last Update Date and Time'].dt.date)
     st.session_state.reviewdata=st.session_state.reviewdata[['App Version Code', 'Reviewer Language', 'Device', 'Review Date', 
                                 'Star Rating', 'Review Title','Review Text']]
-    _show_raw_data_statics(st.session_state.reviewdata)
+    _show_review_data_statics(st.session_state.reviewdata)
+    
     
     st.divider()
-    tab1, tab2 = st.tabs(["📈 按评论时间分析", "🗃 按版本分析"])
-    with tab1:
+    tab_time_analyze, tab_version_analyze = st.tabs(["⏳️ 按评论时间分析", "📈 按版本分析"])
+    with tab_time_analyze:
         st.write('hello')
-    with tab2:
-        st.info('按照版本分析', icon="ℹ️")
+    with tab_version_analyze:
+        version_analyze_target_df=st.session_state.reviewdata
+        
         all_version=st.session_state.reviewdata['App Version Code'].value_counts()
-        col_target, col_baseline = st.columns(2)
         col_target, col_baseline = st.columns(2)
         with col_target:
             target_version = st.selectbox(
@@ -103,18 +110,18 @@ if len(uploaded_file_list)>0:
             baseline_version = [str(x) for x in baseline_version]
             analyze_version = baseline_version + [str(target_version)]
             version_mask=st.session_state.reviewdata['App Version Code'].isin(analyze_version)
-            target_df=st.session_state.reviewdata[version_mask]
+            version_analyze_target_df=st.session_state.reviewdata[version_mask]
         
-        _show_data_by_rating(target_df)
+        _filter_data_by_rating(version_analyze_target_df)
         
         analyze_rating = st.multiselect(
                 '筛选需要分析的评分',
                 [1, 2, 3, 4, 5],
                 [1,2])
         rating_mask=st.session_state.reviewdata['Star Rating'].isin(analyze_rating)
-        target_df=target_df[rating_mask]
+        version_analyze_target_df=version_analyze_target_df[rating_mask]
         
-        st.write('待分析数据: ', len(target_df))
+        st.write('待分析数据: ', len(version_analyze_target_df))
         
 
         if st.button("点击这个按钮，使用LLM分析评论", type="primary", use_container_width=True):
@@ -124,7 +131,7 @@ if len(uploaded_file_list)>0:
                 bedrock_chat=bedrock_wrapper.init_bedrock_chat(model_id=sonnet_id, region_name=region_name)
                 st.success("初始化 Bedrock",icon="✅")
                 
-                st.session_state.analyze_result = review_analyzer.analyze_data(target_df, bedrock_chat)
+                st.session_state.analyze_result = review_analyzer.analyze_data(version_analyze_target_df, bedrock_chat)
                 st.session_state.compare_result = review_analyzer.compare_target_data(st.session_state.target_version, st.session_state.analyze_result, bedrock_chat)
         
         with st.container(border= True):
@@ -148,8 +155,8 @@ if len(uploaded_file_list)>0:
         target_lang = [str(x) for x in target_lang]
         lang_mask=st.session_state.reviewdata['Reviewer Language'].isin(target_lang)
         
-        lang_target_df=target_df[lang_mask]
-        st.write('待分析数据: ', len(lang_target_df))
+        lang_version_analyze_target_df=version_analyze_target_df[lang_mask]
+        st.write('待分析数据: ', len(lang_version_analyze_target_df))
         
         st.divider()
         if st.button("点击这个按钮，使用LLM分析目标语言评论", type="primary", use_container_width=True):
@@ -158,7 +165,7 @@ if len(uploaded_file_list)>0:
                 sonnet_id = "anthropic.claude-3-sonnet-20240229-v1:0"
                 region_name= REGION
                 bedrock_chat=bedrock_wrapper.init_bedrock_chat(model_id=sonnet_id, region_name=region_name)
-                st.session_state.analyze_result_by_lang = review_analyzer.analyze_data_by_lang(lang_target_df, bedrock_chat)
+                st.session_state.analyze_result_by_lang = review_analyzer.analyze_data_by_lang(lang_version_analyze_target_df, bedrock_chat)
                 st.session_state.compare_result_by_lang = review_analyzer.compare_target_data_by_lang(st.session_state.target_version, st.session_state.analyze_result_by_lang, bedrock_chat)
         
         with st.container(border= True):
