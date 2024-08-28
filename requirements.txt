@@ -4,4 +4,3 @@ langchain-community
 streamlit
 pandas
 matplotlib
-langchain-community
