@@ -4,19 +4,37 @@ from langchain_text_splitters import CharacterTextSplitter
 import streamlit as st
 
 def _split_df_to_docs(df, chunk_size=300000):
+    """
+    将DataFrame拆分为文本文档列表。
+
+    :param df: 要拆分的pandas DataFrame
+    :param chunk_size: 每个文档块的最大字符数，默认为300000
+    :return: 如果DataFrame为空，返回空列表，否则返回包含文本块的文档列表
+    """
+    # Check if the DataFrame is empty
+    if df.empty:
+        return []  # Return an empty list if the DataFrame is empty
+
+    # 创建CharacterTextSplitter实例
     text_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=chunk_size,
-        chunk_overlap=0,
-        length_function=len,
-        is_separator_regex=False,
+        separator="\n",  # 使用换行符作为分隔符
+        chunk_size=chunk_size,  # 设置每个块的最大大小
+        chunk_overlap=0,  # 块之间不重叠
+        length_function=len,  # 使用len()函数计算长度
+        is_separator_regex=False,  # 将分隔符视为普通字符串，而非正则表达式
     )
 
-    docs = text_splitter.create_documents([df.to_string(index=False)])
+    # 将DataFrame转换为字符串，不包含索引
+    df_string = df.to_string(index=False)
+    
+    # 使用text_splitter创建文档列表
+    docs = text_splitter.create_documents([df_string])
+    
     return docs
 
-
+# Analyze reviews by language
 def _analyze_review_by_lang(content, bedrock_chat):
+    # Define analysis prompt template
     analyze_prompt = PromptTemplate(
         template="""
         \n\nHuman: 
@@ -78,18 +96,21 @@ def _analyze_review_by_lang(content, bedrock_chat):
         input_variables=["document"]
     )
 
+    # Create analysis chain
     insight_chain = analyze_prompt | bedrock_chat | StrOutputParser()
     
+    # Stream process analysis results
     result_list=[]
     for chunk in insight_chain.stream({
         "document": {content},
     }):
-        # print(chunk, end="", flush=True)
         result_list.append(chunk)
         
     return ''.join(result_list)
 
+# Analyze reviews (not classified by language)
 def _analyze_review(content, bedrock_chat):
+    # Define analysis prompt template
     analyze_prompt = PromptTemplate(
         template="""
         \n\nHuman: 
@@ -151,18 +172,21 @@ def _analyze_review(content, bedrock_chat):
         input_variables=["document"]
     )
 
+    # Create analysis chain
     insight_chain = analyze_prompt | bedrock_chat | StrOutputParser()
     
+    # Stream process analysis results
     result_list=[]
     for chunk in insight_chain.stream({
         "document": {content},
     }):
-        # print(chunk, end="", flush=True)
         result_list.append(chunk)
         
     return ''.join(result_list)
 
+# Merge review analysis results classified by language
 def _merge_review_by_lang(content, bedrock_chat):
+    # Define merge prompt template
     merge_prompt = PromptTemplate(
     template="""
         You are an AI assistant. 
@@ -206,17 +230,20 @@ def _merge_review_by_lang(content, bedrock_chat):
         input_variables=["reviews"]
     )
 
+    # Create merge chain
     merge_chain = merge_prompt | bedrock_chat | StrOutputParser()
+    # Stream process merge results
     result_list=[]
     for chunk in merge_chain.stream({
         "reviews": {content},
     }):
-        # print(chunk, end="", flush=True)
         result_list.append(chunk)
         
     return ''.join(result_list)
 
+# Merge review analysis results (not classified by language)
 def _merge_review(content, bedrock_chat):
+    # Define merge prompt template
     merge_prompt = PromptTemplate(
     template="""
         You are an AI assistant. 
@@ -260,17 +287,20 @@ def _merge_review(content, bedrock_chat):
         input_variables=["reviews"]
     )
 
+    # Create merge chain
     merge_chain = merge_prompt | bedrock_chat | StrOutputParser()
+    # Stream process merge results
     result_list=[]
     for chunk in merge_chain.stream({
         "reviews": {content},
     }):
-        # print(chunk, end="", flush=True)
         result_list.append(chunk)
         
     return ''.join(result_list)
 
+# Generate analysis report
 def _write_analysis_report(content, bedrock):
+    # Define report generation prompt template
     writing_prompt = PromptTemplate(
     template="""
         You're an AI assistant who's proficient in multiple languages and good at writing.
@@ -293,20 +323,24 @@ def _write_analysis_report(content, bedrock):
         input_variables=["reviews"]
     )
 
+    # Create report generation chain
     writing_chain = writing_prompt | bedrock | StrOutputParser()
-    result_list=[]
+    # Stream process report generation results
+    result_list = []
     for chunk in writing_chain.stream({
         "reviews": {content},
     }):
-        # print(chunk, end="", flush=True)
-        # st.write_stream(chunk)
-        result_list.append(chunk)
-        
+        if isinstance(chunk, str):
+            result_list.append(chunk)
+        else:
+            # Handle non-string responses, e.g., log a warning or skip
+            logging.warning(f"Unexpected response type: {type(chunk)}")
+
     return ''.join(result_list)
 
-
-
+# Compare analysis results classified by language
 def _compare_analysis_result_by_lang(target_data, baseline_data, target_version_no, lang, bedrock):
+    # Define comparison prompt template
     compare_prompt = PromptTemplate(
     template="""
         You are an AI assistant who's proficient in multiple languages.
@@ -335,8 +369,10 @@ def _compare_analysis_result_by_lang(target_data, baseline_data, target_version_
         input_variables=["target_data","baseline_data", "target_version_no", "lang"]
     )
 
+    # Create comparison chain
     compare_chain = compare_prompt | bedrock | StrOutputParser()
     
+    # Stream process comparison results
     compare_list=[]
     for chunk in compare_chain.stream({
             "target_data": target_data,
@@ -344,12 +380,13 @@ def _compare_analysis_result_by_lang(target_data, baseline_data, target_version_
             "target_version_no": target_version_no,
             "lang": lang
         }):
-        # print(chunk, end="", flush=True)
         compare_list.append(chunk)
 
     return ''.join(compare_list)
 
+# Compare analysis results (not classified by language)
 def _compare_analysis_result(target_data, baseline_data, target_version_no, bedrock):
+    # Define comparison prompt template
     compare_prompt = PromptTemplate(
     template="""
         You are an AI assistant who's proficient in multiple languages.
@@ -378,150 +415,288 @@ def _compare_analysis_result(target_data, baseline_data, target_version_no, bedr
         input_variables=["target_data","baseline_data", "target_version_no"]
     )
 
+    # Create comparison chain
     compare_chain = compare_prompt | bedrock | StrOutputParser()
     
+    # Stream process comparison results
     compare_list=[]
     for chunk in compare_chain.stream({
             "target_data": target_data,
             "baseline_data": baseline_data,
             "target_version_no": target_version_no
         }):
-        # print(chunk, end="", flush=True)
         compare_list.append(chunk)
 
     return ''.join(compare_list)
 
-
+# Initialize data classified by language
 def _init_data_by_lang(data):
-    st.markdown('''**开始拆分数据...**''')
+    st.markdown('''**Start splitting data...**''')
     raw={}
     for lang in data['Reviewer Language'].unique():
         raw[lang]={}
         for version in data['App Version Code'].unique():
-            # print(f"{lang}, {version}")
             target_data = data[(data['Reviewer Language']== lang) & (data['App Version Code']==version)]
-            # print(f"target_data row: {len(target_data)}")
             docs = _split_df_to_docs(target_data)
             raw[lang][version]= docs
-            # print(f"target data doc number: {len(docs)}")
-            st.success(f"拆分数据:语言{lang}, 版本:{version}, 共{len(docs)} 批",icon="✅")
+            st.success(f"Data split: language {lang}, version:{version}, total {len(docs)} batches",icon="✅")
     return raw
 
+# Initialize data (not classified by language)
 def _init_data(data):
-    st.markdown('''**开始拆分数据...**''')
-    raw={}
-    for version in data['App Version Code'].unique():
-        target_data = data[data['App Version Code']==version]
-        docs = _split_df_to_docs(target_data)
-        raw[version]= docs
-        st.success(f"拆分数据完成: 版本:{version} 共{len(target_data)}条, 分成{len(docs)} 批次处理",icon="✅")
+    """
+    Initializes and preprocesses the review data for analysis.
+
+    Args:
+        data (pandas.DataFrame): A DataFrame containing review information.
+            Expected columns: 'App Version Code', and other review-related columns.
+
+    Returns:
+        dict: A dictionary where keys are app version codes and values are lists of document chunks.
+            Each chunk is a manageable subset of the review data for that version.
+
+    Note:
+        This function uses Streamlit (st) to display progress messages during execution.
+
+    Example input data:
+    data = pd.DataFrame({
+        'App Version Code': ['1.0', '1.0', '2.0', '2.0'],
+        'Reviewer Language': ['en', 'fr', 'en', 'fr'],
+        'Device': ['phone1', 'phone2', 'tablet1', 'tablet2'],
+        'Review Date': ['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-04'],
+        'Star Rating': [4, 3, 5, 2],
+        'Review Title': ['Good app', 'Moyenne', 'Great update', 'Besoin d'amélioration'],
+        'Review Text': ['Works well', 'Pas mal mais peut mieux faire', 'Love the new features', 'Trop de bugs']
+    })
+
+    Example output of raw:
+    raw = {
+        '1.0': [Document(page_content="App Version Code Reviewer Language Device Review Date Star Rating Review Title Review Text\n1.0 en phone1 2023-01-01 4 Good app Works well\n1.0 fr phone2 2023-01-02 3 Moyenne Pas mal mais peut mieux faire")],
+        '2.0': [Document(page_content="App Version Code Reviewer Language Device Review Date Star Rating Review Title Review Text\n2.0 en tablet1 2023-01-03 5 Great update Love the new features\n2.0 fr tablet2 2023-01-04 2 Besoin d'amélioration Trop de bugs")]
+    }
+    """
+
+    # Display a message indicating the start of data splitting process
+    st.markdown('''**Start splitting data...**''')
+    
+    # Initialize an empty dictionary to store processed data
+    raw = {}
+    
+    # Iterate through unique app version codes in the data
+    if not data.empty:
+        for version in data['App Version Code'].unique():
+            # Filter data for the current version
+            target_data = data[data['App Version Code'] == version]
+            
+            # Split the filtered data into manageable chunks
+            docs = _split_df_to_docs(target_data)
+            
+            # Store the split data in the raw dictionary, keyed by version
+            raw[version] = docs
+            
+            # Display a success message with details about the split data
+            st.success(f"Data split completed: version:{version} total {len(target_data)} items, split into {len(docs)} batches for processing", icon="✅")
+        
+    # Return the processed data dictionary
     return raw
 
+# Analyze data (main function)
 @st.cache_data
 def analyze_data(data, _bedrock_chat):
+    """
+    Analyzes review data using a language model provided by Amazon Bedrock.
+
+    Args:
+        data (pandas.DataFrame): A DataFrame containing review information.
+            Expected columns: 'App Version Code', 'Review Text', and other review-related columns.
+        _bedrock_chat (function): A function that interfaces with the Amazon Bedrock language model.
+
+    Returns:
+        dict: A dictionary where keys are app version codes and values are dictionaries containing:
+            - "xmldata": The merged XML data from the analysis.
+            - "report": The generated report in markdown format.
+
+    Note:
+        This function uses Streamlit (st) to display progress messages and reports during execution.
+        It also uses st.cache_data for caching the results.
+
+    Example input:
+        data = pd.DataFrame({
+            'App Version Code': ['1.0', '1.0', '2.0', '2.0'],
+            'Reviewer Language': ['en', 'fr', 'en', 'de'],
+            'Review Text': ['Great app', 'Needs improvement', 'Love it', 'Bug in latest version'],
+            'Star Rating': [5, 2, 4, 3]
+        })
+        _bedrock_chat = xxx
+
+    Example output:
+        {
+            '1.0': {
+                'xmldata': '<version="1.0"><issue><category>Positive Feedback</category><count>1</count>...</issue></version>',
+                'report': '## Summary\nTotal number of comments: 2\n\n## Key Issues Analysis\n- Positive Feedback (50%): Users appreciate the app...'
+            },
+            '2.0': {
+                'xmldata': '<version="2.0"><issue><category>Bug Report</category><count>1</count>...</issue></version>',
+                'report': '## Summary\nTotal number of comments: 2\n\n## Key Issues Analysis\n- Bug Report (50%): Users reported a bug in the latest version...'
+            }
+        }
+    """
+    # Initialize data
     raw = _init_data(data)
-    st.markdown('''**开始分析数据...**''')
+    st.markdown('''**Start analyzing data...**''')
     analyze_result = {}
+    
+    # Iterate through each version of data for analysis
     for version in raw:
         docs = raw[version]
         analyze_result[version]={}
-        st.caption(f'''开始分析数据集版本{version}, 共{len(docs)}批''')
+        st.caption(f'''Start analyzing dataset version {version}, total {len(docs)} batches''')
+        
+        # Analyze data in batches
         chunk_result= []
         for i, doc in enumerate(docs, start=1):
-            st.caption(f'''- 分析第{i}批数据, {len(doc.page_content.split('\n'))} 条...''')
+            st.caption(f'''- Analyzing batch {i}, {len(doc.page_content.split('\n'))} items...''')
             chunk_result.append(_analyze_review(doc.page_content, _bedrock_chat))
-        st.success(f"分析数据集版本{version} 完成", icon="✅")
+        st.success(f"Analysis of dataset version {version} completed", icon="✅")
 
-        st.caption(f'''开始合并数据集版本{version}''')
+        # Merge analysis results
+        st.caption(f'''Start merging dataset version {version}''')
         analyze_result[version]["xmldata"]=_merge_review(''.join(chunk_result), _bedrock_chat)
-        st.success(f"合并数据集版本{version} 完成",icon="✅")
+        st.success(f"Merging dataset version {version} completed",icon="✅")
         
-        st.caption(f'''开始翻译并撰写报告：版本{version}''')
+        # Generate report
+        st.caption(f'''Start translating and writing report: version {version}''')
         st.divider()
         analyze_result[version]["report"] = _write_analysis_report(analyze_result[version]["xmldata"], _bedrock_chat)
-        st.success(f'''完成报告：版本{version}''',icon="✅")
+        st.success(f'''Report completed: version {version}''',icon="✅")
         st.markdown(analyze_result[version]["report"])
         st.divider()
     return analyze_result
 
+# Analyze data by language (main function)
 @st.cache_data
 def analyze_data_by_lang(data, _bedrock_chat):
+    # Initialize data
     raw = _init_data_by_lang(data)
-    st.markdown('''**开始分析数据...**''')
+    st.markdown('''**Start analyzing data...**''')
     analyze_result = {}
+    
+    # Iterate through each language and each version of data for analysis
     for lang in raw:
         analyze_result[lang]={}
         for version in raw[lang]:
             docs = raw[lang][version]
             analyze_result[lang][version]={}
-            st.caption(f'''开始分析数据集语言{lang}, 版本{version}, 共{len(docs)}批''')
+            st.caption(f'''Start analyzing dataset language {lang}, version {version}, total {len(docs)} batches''')
+            
+            # Analyze data in batches
             chunk_result= []
             for i, doc in enumerate(docs, start=1):
-                st.caption(f'''- 分析第{i}批数据, {len(doc.page_content.split('\n'))} 条...''')
+                st.caption(f'''- Analyzing batch {i}, {len(doc.page_content.split('\n'))} items...''')
                 chunk_result.append(_analyze_review_by_lang(doc.page_content, _bedrock_chat))
-            st.success(f"分析数据集语言{lang}, 版本{version} 完成",icon="✅")
+            st.success(f"Analysis of dataset language {lang}, version {version} completed",icon="✅")
             
-            st.caption(f'''开始合并数据集语言{lang}, 版本{version}''')
+            # Merge analysis results
+            st.caption(f'''Start merging dataset language {lang}, version {version}''')
             
             analyze_result[lang][version]["xmldata"]=_merge_review_by_lang(''.join(chunk_result), _bedrock_chat)
-            st.success(f"合并数据集语言{lang}, 版本{version} 完成",icon="✅")
-            # todo write article
-            st.caption(f'''开始翻译并撰写报告：语言{lang}, 版本{version}''')
+            st.success(f"Merging dataset language {lang}, version {version} completed",icon="✅")
+            
+            # Generate report
+            st.caption(f'''Start translating and writing report: language {lang}, version {version}''')
             
             st.divider()
-            # _write_analysis(analyze_result[lang][version], bedrock_chat)
             analyze_result[lang][version]["report"] = _write_analysis_report(analyze_result[lang][version]["xmldata"], _bedrock_chat)
-            st.success(f'''完成报告：语言{lang}, 版本{version}''',icon="✅")
+            st.success(f'''Report completed: language {lang}, version {version}''',icon="✅")
             st.markdown(analyze_result[lang][version]["report"])
             st.divider()
     return analyze_result
 
+# Compare target version with baseline versions (classified by language)
 def compare_target_data_by_lang(target_version_no, analyze_result, bedrock_chat):
-    compare_result={}
+    """
+    Compares the target version's review data with baseline versions for each language.
+
+    Args:
+        target_version_no (str): The version number of the target data to compare.
+        analyze_result (dict): A nested dictionary containing analysis results for each language and version.
+            Structure: {language: {version: {'xmldata': str, 'report': str}}}
+        bedrock_chat (function): A function that interfaces with the Amazon Bedrock language model.
+
+    Returns:
+        dict: A dictionary where keys are language codes and values are comparison reports in markdown format.
+
+    Example input:
+        target_version_no = '2.0'
+        analyze_result = {
+            'en': {
+                '1.0': {'xmldata': '<version="1.0">...</version>', 'report': '...'},
+                '2.0': {'xmldata': '<version="2.0">...</version>', 'report': '...'}
+            },
+            'fr': {
+                '1.0': {'xmldata': '<version="1.0">...</version>', 'report': '...'},
+                '2.0': {'xmldata': '<version="2.0">...</version>', 'report': '...'}
+            }
+        }
+        bedrock_chat = some_bedrock_chat_function
+
+    Example output:
+        {
+            'en': '**Comparative Report for Version 2.0, Language Code en**\n\nNew problems...',
+            'fr': '**Comparative Report for Version 2.0, Language Code fr**\n\nNouvelles problèmes...'
+        }
+    """
+    compare_result = {}
     for lang, versions in analyze_result.items():
-        target_data=''
+        target_data = ''
         baseline_list = []
         for version, data in versions.items():
             if version == target_version_no:
-                target_data=data['xmldata']
+                target_data = data['xmldata']
             else:
                 baseline_list.append(data['xmldata'])
-        # print(f"{lang}, {version}, baseline_data: {''.join(xmldata_list)}, target_data: {target_data}")
-        st.caption(f'''开始对比：语言{lang}, 目标版本{target_version_no}''')
-        compare_result[lang]= _compare_analysis_result_by_lang(target_data, ''.join(baseline_list), target_version_no, lang, bedrock_chat)
-        st.success(f'''完成对比：语言{lang}, 目标版本{target_version_no}''',icon="✅")
+        st.caption(f'''Start comparing: language {lang}, target version {target_version_no}''')
+        compare_result[lang] = _compare_analysis_result_by_lang(target_data, ''.join(baseline_list), target_version_no, lang, bedrock_chat)
+        st.success(f'''Comparison completed: language {lang}, target version {target_version_no}''', icon="✅")
         st.markdown(compare_result[lang])
-        
+    
     return compare_result
 
-
+# Compare target version with baseline versions (not classified by language)
 def compare_target_data(target_version_no, analyze_result, bedrock_chat):
-    compare_result={}
-    target_data=''
-    baseline_list=[]
+    """
+    Compares the target version's review data with baseline versions.
+
+    Args:
+        target_version_no (str): The version number of the target data to compare.
+        analyze_result (dict): A dictionary containing analysis results for each version.
+            Structure: {version: {'xmldata': str, 'report': str}}
+        bedrock_chat (function): A function that interfaces with the Amazon Bedrock language model.
+
+    Returns:
+        str: A comparison report in markdown format.
+
+    Example input:
+        target_version_no = '2.0'
+        analyze_result = {
+            '1.0': {'xmldata': '<version="1.0">...</version>', 'report': '...'},
+            '2.0': {'xmldata': '<version="2.0">...</version>', 'report': '...'}
+        }
+        bedrock_chat = some_bedrock_chat_function
+
+    Example output:
+        '**Comparative Report for Version 2.0**\n\nNew problems...'
+    """
+    compare_result = {}
+    target_data = ''
+    baseline_list = []
     for version, data in analyze_result.items():
         if version == target_version_no:
-            target_data=data['xmldata']
+            target_data = data['xmldata']
         else:
             baseline_list.append(data['xmldata'])
-    st.caption(f'''开始对比：目标版本{target_version_no}''')
-    compare_result= _compare_analysis_result(target_data, ''.join(baseline_list), target_version_no, bedrock_chat)
-    st.success(f'''完成对比：目标版本{target_version_no}''',icon="✅")
+    st.caption(f'''Start comparing: target version {target_version_no}''')
+    compare_result = _compare_analysis_result(target_data, ''.join(baseline_list), target_version_no, bedrock_chat)
+    st.success(f'''Comparison completed: target version {target_version_no}''', icon="✅")
     st.markdown(compare_result)
     return compare_result
-    
-    # for versions in analyze_result.items():
-    #     target_data=''
-    #     baseline_list = []
-    #     for version, data in versions.items():
-    #         if version == target_version_no:
-    #             target_data=data['xmldata']
-    #         else:
-    #             baseline_list.append(data['xmldata'])
-    #     # print(f"{lang}, {version}, baseline_data: {''.join(xmldata_list)}, target_data: {target_data}")
-    #     st.caption(f'''开始对比：语言{lang}, 版本{version}''')
-    #     compare_result[lang]= _compare_analysis_result_by_lang(target_data, ''.join(baseline_list), target_version_no, lang, bedrock_chat)
-    #     st.success(f'''完成对比：语言{lang}, 版本{version}''',icon="✅")
-    #     st.markdown(compare_result[lang])
-        
-    # return compare_result
