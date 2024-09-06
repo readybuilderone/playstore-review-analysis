@@ -10,8 +10,7 @@ menu()
 
 
 with st.sidebar.expander("Bedrock Settings"):
-    # 创建Bedrock客户端
-    client = get_bedrock_client()
+
     # Create a dropdown for region selection
     regions = list_bedrock_model_regions()
     selected_region = st.selectbox("Select Bedrock Region", options=regions, index=0)
