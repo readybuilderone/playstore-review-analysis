@@ -1,16 +1,28 @@
-import os 
-from pathlib import Path
 import streamlit as st
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-import time
-from datetime import datetime, timedelta
 from utils import bedrock_wrapper
 from utils import review_analyzer
+from utils.menu import menu
+from utils.bedrock import get_bedrock_client, list_bedrock_model_regions, list_translate_models
 
-REGION = 'us-west-2'
+menu()
 
+
+with st.sidebar.expander("Bedrock Settings"):
+    # 创建Bedrock客户端
+    client = get_bedrock_client()
+    # Create a dropdown for region selection
+    regions = list_bedrock_model_regions()
+    selected_region = st.selectbox("Select Bedrock Region", options=regions, index=0)
+    client = get_bedrock_client(region=selected_region)
+
+    models = list_translate_models()
+    model_id = st.selectbox("Select Model Id", options=models, index=0)
+    max_tokens = st.number_input("Max Tokens", min_value=1, value=4096)
+    temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=0.0, step=0.1)
+    top_p = st.slider("Top P", min_value=0.0, max_value=1.0, value=0.9, step=0.1)
+    
 def _init_session_state():
     # Store the original data from uploaded CSV files
     if 'rawdata' not in st.session_state:
@@ -90,9 +102,7 @@ def _analyze_reviews_by_version():
     
     if st.button("点击这个按钮，使用LLM分析评论", type="primary", use_container_width=True):
         with st.status("分析评论...", expanded=True):
-            sonnet_id = "anthropic.claude-3-sonnet-20240229-v1:0"
-            region_name = REGION
-            bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=sonnet_id, region_name=region_name)
+            bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=model_id, region_name=selected_region)
             st.success("初始化 Bedrock", icon="✅")
             
             st.session_state.analyze_result = review_analyzer.analyze_data(version_analyze_target_df, bedrock_chat)
@@ -122,9 +132,7 @@ def _analyze_reviews_by_version():
     if st.button("点击这个按钮，使用LLM分析目标语言评论", type="primary", use_container_width=True):
         with st.status("分析目标语言评论...", expanded=True):
             st.success("初始化 Bedrock", icon="✅")
-            sonnet_id = "anthropic.claude-3-sonnet-20240229-v1:0"
-            region_name = REGION
-            bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=sonnet_id, region_name=region_name)
+            bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=model_id, region_name=selected_region)
             st.session_state.analyze_result_by_lang = review_analyzer.analyze_data_by_lang(lang_version_analyze_target_df, bedrock_chat)
             st.session_state.compare_result_by_lang = review_analyzer.compare_target_data_by_lang(st.session_state.target_version, st.session_state.analyze_result_by_lang, bedrock_chat)
     
@@ -141,7 +149,6 @@ def _analyze_reviews_by_version():
                 st.markdown(f'''{report}''')
 
 def _analyze_reviews_by_time(data):
-    st.write('hello')
     # Get min and max review dates
     min_date = data['Review Date'].min().date()
     max_date = data['Review Date'].max().date()
@@ -177,25 +184,21 @@ def _analyze_reviews_by_time(data):
         st.write('待分析数据量: ', len(date_rating_version_filtered_data))
         if st.button("点击这个按钮，使用LLM分析评论", type="primary", use_container_width=True, key='date_analyze_button_with_version'):
             with st.status("分析评论...", expanded=True):
-                sonnet_id = "anthropic.claude-3-sonnet-20240229-v1:0"
-                region_name = REGION
-                bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=sonnet_id, region_name=region_name)
+                bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=model_id, region_name=selected_region)
                 st.success("初始化 Bedrock", icon="✅")
                 
                 st.session_state.analyze_result_by_time = review_analyzer.analyze_data(date_rating_version_filtered_data, bedrock_chat)
     else:
         if st.button("点击这个按钮，使用LLM分析评论(忽略版本信息)", type="primary", use_container_width=True, key='date_analyze_button_without_version'):
             with st.status("分析评论...", expanded=True):
-                sonnet_id = "anthropic.claude-3-sonnet-20240229-v1:0"
-                region_name = REGION
-                bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=sonnet_id, region_name=region_name)
+                bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=model_id, region_name=selected_region)
                 st.success("初始化 Bedrock", icon="✅")
                 
-                # st.session_state.analyze_result_by_time = review_analyzer.analyze_data(date_rating_filtered_data, bedrock_chat)
+                st.session_state.analyze_result_by_time = review_analyzer.analyze_data_without_version(date_rating_filtered_data, bedrock_chat)
     
     
     
-    # TODO: Add your analysis logic here using the filtered_data
+
     
 
 st.header("Google Play 应用商店评论分析")

@@ -1,0 +1,13 @@
+supportedmodel: #bedrock anthropic model you want to use
+  - anthropic.claude-3-5-sonnet-20240620-v1:0
+  - anthropic.claude-3-sonnet-20240229-v1:0
+  - anthropic.claude-3-haiku-20240307-v1:0
+  - anthropic.claude-3-opus-20240229-v1:0
+
+model_region: #bedrock anthropic model region
+  - us-west-2
+  - us-east-1
+
+  
+support: # support contact info
+  - xyz

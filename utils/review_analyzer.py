@@ -3,13 +3,28 @@ from langchain.schema.output_parser import StrOutputParser
 from langchain_text_splitters import CharacterTextSplitter
 import streamlit as st
 
+
 def _split_df_to_docs(df, chunk_size=300000):
     """
     将DataFrame拆分为文本文档列表。
 
-    :param df: 要拆分的pandas DataFrame
-    :param chunk_size: 每个文档块的最大字符数，默认为300000
-    :return: 如果DataFrame为空，返回空列表，否则返回包含文本块的文档列表
+    Args:
+        df (pandas.DataFrame): 要拆分的pandas DataFrame
+        chunk_size (int, optional): 每个文档块的最大字符数，默认为300000
+
+    Returns:
+        list: 如果DataFrame为空，返回空列表，否则返回包含文本块的文档列表
+
+    Example:
+        Input:
+            df = pd.DataFrame({
+                'A': [1, 2, 3],
+                'B': ['a', 'b', 'c']
+            })
+            chunk_size = 100
+
+        Output:
+            [Document(page_content="A  B\n1  a\n2  b\n3  c")]
     """
     # Check if the DataFrame is empty
     if df.empty:
@@ -35,6 +50,47 @@ def _split_df_to_docs(df, chunk_size=300000):
 # Analyze reviews by language
 def _analyze_review_by_lang(content, bedrock_chat):
     # Define analysis prompt template
+    """
+    定义用于分析评论的提示模板。
+
+    输入参数:
+    - content (str): 包含评论数据的CSV格式字符串
+    - bedrock_chat (function): 用于与Bedrock模型交互的函数
+
+    返回值:
+    - 分析结果，XML样式
+
+    示例:
+    输入:
+        content = "App Version,Reviewer Language,Device,Review Date,Star Rating,Review Title,Review Text\n1.0,en,phone1,2023-01-01,2,Bad app,Crashes frequently"
+        bedrock_chat = <function to interact with Bedrock model>
+
+    输出:
+        <version='version_a' lang='abc'>
+            <issue>
+                <category> issue x category</category>
+                <count> how many reviews are in x category</count>
+                <description>why player is dissatisfied for this issue category</description>
+            </issue>
+            <issue>
+                <category> issue y category</category>
+                <count> how many reviews are in y category</count>
+                <description>why player is dissatisfied for this issue category</description>
+            </issue>
+        </version>
+        <version='version_b' lang='abc'>
+            <issue>
+                <category> issue x category</category>
+                <count> how many reviews are in x category</count>
+                <description>why player is dissatisfied for this issue category</description>
+            </issue>
+            <issue>
+                <category> issue y category</category>
+                <count> how many reviews are in y category</count>
+                <description>why player is dissatisfied for this issue category</description>
+            </issue>
+        </version>
+    """
     analyze_prompt = PromptTemplate(
         template="""
         \n\nHuman: 
@@ -183,6 +239,98 @@ def _analyze_review(content, bedrock_chat):
         result_list.append(chunk)
         
     return ''.join(result_list)
+
+def _analyze_review_without_version(content, bedrock_chat):
+    # Define analysis prompt template for reviews without version information
+    """
+    Analyzes review data without version information using a language model.
+
+    Args:
+        content (str): A string containing review data in CSV format.
+        bedrock_chat (function): A function that interfaces with the Amazon Bedrock language model.
+
+    Returns:
+        str: An XML string containing categorized negative reviews and their analysis.
+
+    Example input:
+        content = "en,samsung-sm-g973f,2023-05-15,2,Disappointing,The app keeps crashing.\nfr,google-pixel-4a,2023-05-16,1,Terrible,Cannot log in at all."
+        bedrock_chat = <function that interfaces with Amazon Bedrock>
+
+    Example output:
+        <issues>
+        <issue>
+        <category>App Stability</category>
+        <count>1</count>
+        <description>Users are experiencing frequent app crashes, leading to frustration and inability to use the app effectively.</description>
+        </issue>
+        <issue>
+        <category>Login Issues</category>
+        <count>1</count>
+        <description>Users are unable to log in to the app, completely preventing them from accessing its features.</description>
+        </issue>
+        </issues>
+    """
+    analyze_prompt = PromptTemplate(
+        template="""
+        \n\nHuman: 
+
+        You are an AI assistant trained to identify and categorize user negative reviews.
+        You're specialized in many languages.
+        You'll be provided with a batch of google play reviews in csv, the format is described in the <format> </format> tag.
+        Your task is to identify and categorize customer negative reviews in <review></review> tag.
+        You need to follow the instructions in <instructions></instructions> tag.
+
+        <format>
+        - Column 1, Code Reviewer Language: Language code for the reviewer.
+        - Column 2, Device: Codename for the reviewer's device.
+        - Column 3, Review Date: Date when the review was written.
+        - Column 4, Star Rating: The star rating associated with the review, from 1 to 5.
+        - Column 5, Review Title: The review title.
+        - Column 6, Review Text: The review content.
+        </format>
+
+        <review> 
+        {document}
+        </review>
+
+        <instructions>
+        - Identify and category negative reviews in the <category></category> tags, you can make categories on your own
+        - Describe the issue in the <description></description> tag, explain why the player is dissatisfied
+        - Your output must be a fully formatted xml file that intelligently contains the <issues>, <issue>, <category>, <count> tags and no other tags.
+        - You don't need to include the original review text
+        </instructions>
+
+        \n\nAssistant:
+        <issues>
+        <issue>
+        <category> issue x category</category>
+        <count> how many reviews are in x category</count>
+        <description>why player is dissatisfied for this issue category</description>
+        </issue>
+        <issue>
+        <category> issue y category</category>
+        <count> how many reviews are in y category</count>
+        <description>why player is dissatisfied for this issue category</description>
+        </issue>
+        </issues>
+        """,
+        input_variables=["document"]
+    )
+
+    # Create analysis chain
+    insight_chain = analyze_prompt | bedrock_chat | StrOutputParser()
+    
+    # Stream process analysis results
+    result_list=[]
+    for chunk in insight_chain.stream({
+        "document": {content},
+    }):
+        result_list.append(chunk)
+        
+    return ''.join(result_list)
+
+
+
 
 # Merge review analysis results classified by language
 def _merge_review_by_lang(content, bedrock_chat):
@@ -500,6 +648,38 @@ def _init_data(data):
     # Return the processed data dictionary
     return raw
 
+def _init_data_without_version(data):
+    """
+    Initializes and preprocesses the review data for analysis without version information.
+
+    Args:
+        data (pandas.DataFrame): A DataFrame containing review information.
+    
+    Returns:
+        list: A list of document chunks, where each chunk is a manageable subset of the review data.
+
+    Note:
+        This function uses Streamlit (st) to display progress messages during execution.
+
+    Example input:
+        data = pd.DataFrame({
+            'Reviewer Language': ['en', 'fr', 'en', 'de'],
+            'Review Text': ['Great app', 'Needs improvement', 'Love it', 'Bug in latest version'],
+            'Star Rating': [5, 2, 4, 3]
+        })
+    Example output:
+        raw = [
+            Document(page_content="Reviewer Language Review Text Star Rating\nen Great app 5\nfr Needs improvement 2"),
+            Document(page_content="en Love it 4\nde Bug in latest version 3")
+        ]
+    """
+    st.markdown('''**Start splitting data...**''')
+    raw=[]
+    if not data.empty:
+        raw = _split_df_to_docs(data)
+    st.success(f"Data split: total {len(raw)} batches",icon="✅")   
+    return raw
+    
 # Analyze data (main function)
 @st.cache_data
 def analyze_data(data, _bedrock_chat):
@@ -560,9 +740,12 @@ def analyze_data(data, _bedrock_chat):
         st.success(f"Analysis of dataset version {version} completed", icon="✅")
 
         # Merge analysis results
-        st.caption(f'''Start merging dataset version {version}''')
-        analyze_result[version]["xmldata"]=_merge_review(''.join(chunk_result), _bedrock_chat)
-        st.success(f"Merging dataset version {version} completed",icon="✅")
+        if len(docs) > 1:
+            st.caption(f'''Start merging dataset version {version}''')
+            analyze_result[version]["xmldata"]=_merge_review(''.join(chunk_result), _bedrock_chat)
+            st.success(f"Merging dataset version {version} completed",icon="✅")
+        else:
+            analyze_result[version]["xmldata"] = chunk_result[0]
         
         # Generate report
         st.caption(f'''Start translating and writing report: version {version}''')
@@ -572,6 +755,50 @@ def analyze_data(data, _bedrock_chat):
         st.markdown(analyze_result[version]["report"])
         st.divider()
     return analyze_result
+
+@st.cache_data
+def analyze_data_without_version(data, _bedrock_chat):
+    """
+    Analyzes review data without version information using a language model provided by Amazon Bedrock.
+
+    Args:
+        data (pandas.DataFrame): A DataFrame containing review information.
+            Expected columns: 'Review Text', and other review-related columns.
+
+    Returns:
+        dict: A dictionary containing:
+            - "xmldata": The merged XML data from the analysis.
+            - "report": The generated report in markdown format.
+
+    Note:
+        This function uses Streamlit (st) to display progress messages and reports during execution.
+        It also uses st.cache_data for caching the results.
+    """
+    
+    data_removed_version = data.drop(columns=['App Version Code'])
+    raw = _init_data_without_version(data_removed_version) # raw is a list of docs
+    analyze_result = {}
+    st.markdown('''**Start analyzing data...**''')
+    chunk_result= []
+    for i, doc in enumerate(raw, start=1):
+        st.caption(f'''- Analyzing batch {i}, {len(doc.page_content.split('\n'))} items...''')
+        chunk_result.append(_analyze_review_without_version(doc.page_content, _bedrock_chat))
+    st.success(f"Analysis completed", icon="✅")
+    
+    if len(chunk_result) > 1:
+        st.caption(f'''Start merging dataset''')
+        analyze_result["xmldata"] = _merge_review(''.join(chunk_result), _bedrock_chat)
+        st.success(f"Merging dataset completed",icon="✅")
+    else:
+        analyze_result["xmldata"] = chunk_result[0]
+    
+    st.caption(f'''Start translating and writing report''')
+    analyze_result["report"] = _write_analysis_report(analyze_result["xmldata"], _bedrock_chat)
+    st.success(f"Report completed",icon="✅")
+    st.markdown(analyze_result["report"])
+    return analyze_result
+    
+
 
 # Analyze data by language (main function)
 @st.cache_data
