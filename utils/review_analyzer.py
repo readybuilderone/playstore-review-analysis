@@ -1095,6 +1095,34 @@ def analyze_data_without_version(data, _bedrock_chat):
     return analyze_result
     
 
+@st.cache_data
+def analyze_data_without_version_by_lang(data, _bedrock_chat):
+    data_removed_version = data.drop(columns=['App Version Code'])
+    raw = _init_data_by_lang_without_version(data_removed_version)
+    st.markdown('''**Start analyzing data...**''')
+    analyze_result = {}
+    for lang in raw:
+        st.caption(f'''Start analyzing dataset language {lang}, total {len(raw[lang])} batches''')
+        analyze_result[lang]={}
+        chunk_result= []
+        docs = raw[lang]
+        for i, doc in enumerate(docs, start=1):
+            st.caption(f'''- Analyzing batch {i}, {len(doc.page_content.split('\n'))} items...''')
+            chunk_result.append(_analyze_review_by_lang_without_version(doc.page_content, _bedrock_chat))
+        st.success(f"Analysis of dataset language {lang} completed",icon="✅")
+
+        if len(chunk_result) > 1:
+            st.caption(f'''Start merging dataset language {lang}''')
+            analyze_result[lang]["xmldata"] = _merge_review_without_version_by_lang(''.join(chunk_result), _bedrock_chat)
+            st.success(f"Merging dataset language {lang} completed",icon="✅")
+        else:
+            analyze_result[lang]["xmldata"] = chunk_result[0]
+
+        st.caption(f'''Start translating and writing report: language {lang}''')
+        analyze_result[lang]["report"] = _write_analysis_report(analyze_result[lang]["xmldata"], _bedrock_chat)
+        st.success(f"Report completed: language {lang}",icon="✅")
+        st.markdown(analyze_result[lang]["report"])
+    return analyze_result
 
 # Analyze data by language (main function)
 @st.cache_data

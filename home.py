@@ -173,7 +173,7 @@ def _analyze_reviews_by_time(data):
     
     st.write('待分析数据量: ', len(date_rating_filtered_data))
     
-    analyze_with_version = st.checkbox('是否按版本分析')
+    analyze_with_version = st.checkbox('是否按版本聚类分析')
     if analyze_with_version:
         _show_data_by_version(date_rating_filtered_data)
         anlyze_version = st.multiselect('筛选需要分析的版本', date_rating_filtered_data['App Version Code'].unique(), key='date_analyze_version')
@@ -196,13 +196,14 @@ def _analyze_reviews_by_time(data):
         date_rating_version_lang_filtered_data = date_rating_version_filtered_data[lang_mask]
         st.write('待分析数据: ', len(date_rating_version_lang_filtered_data))
         
-        if st.button("点击这个按钮，使用LLM 按语言分析评论(忽略版本信息)", type="primary", use_container_width=True, key='date_analyze_button_by_lang_with_version'):
+        if st.button("点击这个按钮，使用LLM 分析选中语言的评论(按版本聚类，按语言聚类)", type="primary", use_container_width=True, key='date_analyze_button_by_lang_with_version'):
             with st.status("分析评论...", expanded=True):
                 bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=model_id, region_name=selected_region)
-                st.success("初始化 Bedrock", icon="✅")              
+                st.success("初始化 Bedrock", icon="✅")
+                review_analyzer.analyze_data_by_lang(date_rating_version_lang_filtered_data, bedrock_chat)
                 # st.session_state.analyze_result_by_time = review_analyzer.analyze_data_without_version(date_rating_version_lang_filtered_data, bedrock_chat)
     else:
-        if st.button("点击这个按钮，使用LLM分析评论(所有语种, 忽略版本信息)", type="primary", use_container_width=True, key='date_analyze_button_without_version'):
+        if st.button("点击这个按钮，使用LLM分析评论(所有语种,忽略版本信息)", type="primary", use_container_width=True, key='date_analyze_button_without_version'):
             with st.status("分析评论...", expanded=True):
                 bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=model_id, region_name=selected_region)
                 st.success("初始化 Bedrock", icon="✅")              
@@ -218,7 +219,7 @@ def _analyze_reviews_by_time(data):
         date_rating_lang_filtered_data = date_rating_filtered_data[lang_mask]
         st.write('待分析数据: ', len(date_rating_lang_filtered_data))
 
-        if st.button("点击这个按钮，使用LLM 按语言分析评论(忽略版本信息)", type="primary", use_container_width=True, key='date_analyze_button_by_lang_without_version'):
+        if st.button("点击这个按钮，使用LLM分析评论(按选中的语言聚类，忽略版本信息)", type="primary", use_container_width=True, key='date_analyze_button_by_lang_without_version'):
             with st.status("分析评论...", expanded=True):
                 bedrock_chat = bedrock_wrapper.init_bedrock_chat(model_id=model_id, region_name=selected_region)
                 st.success("初始化 Bedrock", icon="✅")              
