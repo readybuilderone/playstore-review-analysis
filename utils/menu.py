@@ -13,7 +13,7 @@ def _check_password():
         return True
 
     with st.form("Credentials"):
-        st.title("Amazon LLM Translate Tool")
+        st.title("应用商店评论分析")
         st.caption("尝鲜版 用户名：:blue[demo_user] 密码: :blue[demo_password123]")
         
         username = st.text_input("Username")
