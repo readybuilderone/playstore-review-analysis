@@ -1,5 +1,11 @@
 import streamlit as st
 import hmac
+import os
+import yaml
+
+yaml_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+with open(yaml_path, 'r') as f:
+    config_data = yaml.safe_load(f)
 
 def _check_password():
     """Authenticate user and manage login state."""
@@ -7,9 +13,14 @@ def _check_password():
         return True
 
     with st.form("Credentials"):
+        st.title("应用商店评论分析")
+        st.caption("尝鲜版 用户名：:blue[demo_user] 密码: :blue[demo_password123]")
+        
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
         submitted = st.form_submit_button("Log in")
+        
+        st.info(f"需要支持请联系 {config_data['support']}")
 
     if submitted:
         if username in st.secrets["passwords"] and hmac.compare_digest(
